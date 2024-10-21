@@ -1,22 +1,45 @@
 language: python
-dist: focal
-before_install:
-- sudo apt-get update
-- sudo apt-get install -y sqlite3
-- sqlite3 --version
-install:
-- pip install -r mysite/requirements.txt
-script:
-- pytest mysite/polls/tests.py
+python:
+  - "3.8"
+
+dist: focal  # Use Ubuntu Focal Fossa 20.04 (has SQLite 3.31.1)
+
 env:
-- DJANGO_SETTINGS_MODULE=mysite.settings
-services:
-- sqlite3
+  global:
+    - DJANGO_SETTINGS_MODULE=mysite.settings
+
+before_install:
+  - sudo apt-get update
+  - sudo apt-get install -y sqlite3
+  - sqlite3 --version
+
+install:
+  - pip install --upgrade pip
+  - pip install -r mysite/requirements.txt
+  - pip install awscli pytest
+
+script:
+  - cd mysite  # Change to the directory containing manage.py
+  - python manage.py test polls  # Run Django tests
+
+before_deploy:
+  - cd ..  # Return to the root directory
+  - pip install awsebcli  # Install the Elastic Beanstalk CLI
+  - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+  - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+  - aws configure set default.region us-west-2
+
 deploy:
-  provider: s3
+  provider: elasticbeanstalk
   access_key_id: $AWS_ACCESS_KEY_ID
   secret_access_key: $AWS_SECRET_ACCESS_KEY
-  bucket:  elasticbeanstalk-us-west-2-158596392157
-  region: us-west-2
+  region: "us-west-2"
+  app: "django-tutorial"
+  env: "django-env"
+  bucket_name: "elasticbeanstalk-us-west-2-158596392157"
   on:
     branch: main
+
+after_deploy:
+  - aws elasticbeanstalk describe-environments --environment-names django-env
+  - aws elasticbeanstalk describe-events --environment-name django-env --max-items 10
