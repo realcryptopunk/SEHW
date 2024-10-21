@@ -4,4 +4,4 @@
      install:
        - pip install -r mysite/requirements.txt  # Install dependencies
      script:
-       - pytest  
+       - pytest pytest mysite/polls/tests.py
