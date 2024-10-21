@@ -1,67 +1,28 @@
 language: python
 python:
-  - "3.8"  # Adjust this if you're using a different Python version
-
-env:
-  global:
-    - DJANGO_SETTINGS_MODULE=mysite.settings
-
+- '3.8'
+dist: focal
 before_install:
-  - pip install --upgrade pip
-
+- sudo apt-get update
+- sudo apt-get install -y sqlite3
+- sqlite3 --version
 install:
-  - pip install -r mysite/requirements.txt
-  - pip install awscli pytest
-
+- pip install -r mysite/requirements.txt
 script:
-  - pytest mysite/polls/tests.py
-
-before_deploy:
-  - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
-  - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-  - aws configure set default.region us-west-2
-  - |
-    MAX_RETRIES=5
-    RETRY_INTERVAL=60
-    for i in $(seq 1 $MAX_RETRIES); do
-      echo "Attempt $i: Checking environment status"
-      ENV_INFO=$(aws elasticbeanstalk describe-environments --environment-names django-env)
-      echo "Environment Info: $ENV_INFO"
-      
-      HEALTH_INFO=$(aws elasticbeanstalk describe-environment-health --environment-name django-env --attribute-names All)
-      echo "Health Info: $HEALTH_INFO"
-      
-      ENV_STATUS=$(echo $ENV_INFO | jq -r '.Environments[0].Status')
-      HEALTH_STATUS=$(echo $HEALTH_INFO | jq -r '.Color')
-      
-      if [ "$ENV_STATUS" = "Ready" ] && [ "$HEALTH_STATUS" = "Green" ]; then
-        echo "Environment is ready and healthy. Proceeding with deployment."
-        break
-      elif [ "$HEALTH_STATUS" = "Red" ]; then
-        echo "Environment is unhealthy. Checking recent events:"
-        aws elasticbeanstalk describe-events --environment-name django-env --max-items 10
-        echo "Attempting to rebuild environment."
-        aws elasticbeanstalk rebuild-environment --environment-name django-env
-      fi
-      
-      if [ $i -eq $MAX_RETRIES ]; then
-        echo "Max retries reached. Aborting deployment."
-        exit 1
-      fi
-      sleep $RETRY_INTERVAL
-    done
-
+- pytest mysite/polls/tests.py
+env:
+- DJANGO_SETTINGS_MODULE=mysite.settings
+services:
+- sqlite3
 deploy:
   provider: elasticbeanstalk
-  access_key_id: $AWS_ACCESS_KEY_ID
-  secret_access_key: $AWS_SECRET_ACCESS_KEY
-  region: "us-west-2"
-  app: "django-tutorial"
-  env: "django-env"
-  bucket_name: "elasticbeanstalk-us-west-2-158596392157"
+  access_key_id:
+    secure: kdP2CZfuzJB2wIOQ1RboxMjHfvxXB/Kfqe0xW3rzMogm+o+9XgCTghToWLMkpf+nvcRyz4ZDjBxc1koYeYB4aiK7tpRQDW7+57nS9k/Sb9GlwZkPHqNP+8r1DF8O+syCdz3XuCZARqmDxxMUrpA2M4RcL8hvEFjLci5OKhQabjkG82EGF8NIuU+9D1GFKN0Ehqn3YXtqcIYFrBNloLnT0DDbPhoQ/zHGlKpU8TdYsUQPkGANvb2ThcpCgIXSL9oEhggi0mIEjWfm/kUg2YT8IhqZRl0a66vXZjrEUKuxxV+mdI7Ma0NiVwJuB+E6FTXTDZtz75yqlpCXVQPapAsF+WFIWwHcXsz6MiQtkPJ9fM1goCjH0ISs4Dpdd/Q7j3w7+JSQhs/oNBJ4/lIXKSh2RpzcNiLa6SD/uTTDIdUEH8EaX63clwECShZUDJQ5ytGNrMgUuMnpX0kR4CvbvBkwhCby96QZeJqxvPN5STDTiQ+CWLzxiPHCzFijXChEbZezWv6YMRLSpmus4CTJd23MPO52pWaT2ud4+2s+vXFjQupmz8pkkj1WioZM7GA8FGo1hCAppIqSurQTrVlPW3Sm4Z3uLNk4JiJXb6iXN2T65GqLM90IoBdHA+WU+L5VyvGdngZAsHYzbcxnD7UlmeUrBAYFtlwMdQGDDHmfzl0r+XQ=
+  secret_access_key:
+    secure: ywaxrl+MQtdN3PuW9WR6gFygsBbhVaatuWosMoVWKLbPiBkNukNGoLx8Ktl3HOUmON97b/e4wqrJmJM2QLw7zG7J3nrr5Qi3WcMu/EvJMdQL/scLvimD7Fk89fM9aTGhoEB0mMZrM5neOuFO6imAFj2UQCbeemCJsG1QmHowoLWzOMkgHamlyyZ47RsWDZvUjGkvLJPWoShBMwoJ1dUoFcVDwL1gTz65uBeAGH25QlzmjCJGdswtkz+36bofK5JOZKmyxtI+zWn85Yx/Zs5NBnF9JPKugbl5eMQBxj4T4zlqs001shHWjijuJf7KgMd/c8WtfTF3NmimUUkj0V8IycgdKv1G5dF7YdabOAGnyn4XnsGQZkpdwugj+/Sw6z1++IlvHrH73RoEXQFx0RDMOh4eR0KQPIFxnarx1sNZWp/x70QhitbtuJvoFMQD791Z+qkK1R3huyfBQM/OOD1Qntn8D/Lm5gSSoS/qt8l7ARxmulZ5s91S6AHFatYVaWZgSs7Sjb2WVuAaggX2jdFT46A15W/r4zmKOxYbsnKhH+1f01kYLDuJF+46hfyFvOFvFyj1mx/ZeC7VkBGTUVPOETCSAeGbXhFm2GzxktRiTcmhhXGfDUi6fCB5aFthwqdPma19fur+64Rl8nNT8Yz8UJU393QLr9BMKTrvf+f9/GE=
+  region: us-west-2
+  app: django-tutorial
+  env: django-env
+  bucket_name: elasticbeanstalk-us-west-2-158596392157
   on:
     branch: main
-
-after_deploy:
-  - aws elasticbeanstalk describe-environments --environment-names django-env
-  - aws elasticbeanstalk describe-events --environment-name django-env --max-items 10
