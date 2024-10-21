@@ -7,6 +7,7 @@ dist: focal
 env:
   global:
     - DJANGO_SETTINGS_MODULE=mysite.settings
+    - AWS_DEFAULT_REGION=us-west-2
 
 install:
   - pip install --upgrade pip
@@ -16,17 +17,11 @@ install:
 script:
   - cd mysite
   - python manage.py test polls
+  - cd ..
 
 before_deploy:
-  - cd ..
+  - eb init django-tutorial -p python-3.9 --region $AWS_DEFAULT_REGION
   - eb use django-env
-  - |
-    CURRENT_PLATFORM=$(eb platform show | grep "Platform:" | awk '{print $2}')
-    if [[ "$CURRENT_PLATFORM" != "python-3.9" ]]; then
-      echo "Current platform is outdated. Updating to Python 3.9..."
-      eb platform select python-3.9
-      eb upgrade
-    fi
   - |
     MAX_RETRIES=5
     RETRY_INTERVAL=60
@@ -54,7 +49,7 @@ deploy:
   provider: elasticbeanstalk
   access_key_id: $AWS_ACCESS_KEY_ID
   secret_access_key: $AWS_SECRET_ACCESS_KEY
-  region: "us-west-2"
+  region: $AWS_DEFAULT_REGION
   app: "django-tutorial"
   env: "django-env"
   bucket_name: "elasticbeanstalk-us-west-2-158596392157"
