@@ -1,6 +1,4 @@
 language: python
-python:
-- '3.8'
 dist: focal
 before_install:
 - sudo apt-get update
