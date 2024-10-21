@@ -14,7 +14,7 @@ before_install:
   - pip install awscli
 
 install:
-  - pip install -r requirements.txt
+  - pip install -r mysite/requirements.txt
 
 before_script:
   - psql -c 'create database travis_ci_test;' -U postgres  # if using PostgreSQL
