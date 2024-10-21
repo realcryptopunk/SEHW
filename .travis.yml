@@ -1,5 +1,28 @@
-before_deploy:
+language: python
+python:
+  - "3.8"  # or whichever version you're using
+
+services:
+  - postgresql  # if you're using PostgreSQL
+
+env:
+  global:
+    - DJANGO_SETTINGS_MODULE=mysite.settings
+
+before_install:
+  - pip install --upgrade pip
   - pip install awscli
+
+install:
+  - pip install -r requirements.txt
+
+before_script:
+  - psql -c 'create database travis_ci_test;' -U postgres  # if using PostgreSQL
+
+script:
+  - python manage.py test
+
+before_deploy:
   - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
   - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
   - aws configure set default.region us-west-2
@@ -13,13 +36,6 @@ before_deploy:
       
       HEALTH_INFO=$(aws elasticbeanstalk describe-environment-health --environment-name django-env --attribute-names All)
       echo "Health Info: $HEALTH_INFO"
-      
-      INSTANCE_HEALTH=$(aws elasticbeanstalk describe-instances-health --environment-name django-env --attribute-names All)
-      echo "Instance Health: $INSTANCE_HEALTH"
-      
-      ASG_NAME=$(echo $ENV_INFO | jq -r '.Environments[0].AutoScalingGroups[0].Name')
-      ASG_INFO=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names $ASG_NAME)
-      echo "Auto Scaling Group Info: $ASG_INFO"
       
       ENV_STATUS=$(echo $ENV_INFO | jq -r '.Environments[0].Status')
       HEALTH_STATUS=$(echo $HEALTH_INFO | jq -r '.Color')
