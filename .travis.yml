@@ -1,28 +1,45 @@
-language: python
-python:
-  - '3.8'
-dist: focal
-
-install:
-  - pip install -r mysite/requirements.txt
-  - pip install awscli
-
-script:
-  - pytest mysite/polls/tests.py
-
-env:
-  global:
-    - DJANGO_SETTINGS_MODULE=mysite.settings
-
 before_deploy:
-  - if [ -z "$AWS_ACCESS_KEY_ID" ]; then echo "AWS_ACCESS_KEY_ID is not set"; exit 1; fi
-  - if [ -z "$AWS_SECRET_ACCESS_KEY" ]; then echo "AWS_SECRET_ACCESS_KEY is not set"; exit 1; fi
+  - pip install awscli
   - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
   - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
   - aws configure set default.region us-west-2
-  - aws sts get-caller-identity
-  - aws s3 ls s3://elasticbeanstalk-us-west-2-158596392157 || echo "Failed to list S3 bucket"
-  - aws elasticbeanstalk describe-environments --application-name django-tutorial || echo "Failed to describe Elastic Beanstalk environments"
+  - |
+    MAX_RETRIES=5
+    RETRY_INTERVAL=60
+    for i in $(seq 1 $MAX_RETRIES); do
+      echo "Attempt $i: Checking environment status"
+      ENV_INFO=$(aws elasticbeanstalk describe-environments --environment-names django-env)
+      echo "Environment Info: $ENV_INFO"
+      
+      HEALTH_INFO=$(aws elasticbeanstalk describe-environment-health --environment-name django-env --attribute-names All)
+      echo "Health Info: $HEALTH_INFO"
+      
+      INSTANCE_HEALTH=$(aws elasticbeanstalk describe-instances-health --environment-name django-env --attribute-names All)
+      echo "Instance Health: $INSTANCE_HEALTH"
+      
+      ASG_NAME=$(echo $ENV_INFO | jq -r '.Environments[0].AutoScalingGroups[0].Name')
+      ASG_INFO=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names $ASG_NAME)
+      echo "Auto Scaling Group Info: $ASG_INFO"
+      
+      ENV_STATUS=$(echo $ENV_INFO | jq -r '.Environments[0].Status')
+      HEALTH_STATUS=$(echo $HEALTH_INFO | jq -r '.Color')
+      
+      if [ "$ENV_STATUS" = "Ready" ] && [ "$HEALTH_STATUS" = "Green" ]; then
+        echo "Environment is ready and healthy. Proceeding with deployment."
+        break
+      elif [ "$HEALTH_STATUS" = "Red" ]; then
+        echo "Environment is unhealthy. Checking recent events:"
+        aws elasticbeanstalk describe-events --environment-name django-env --max-items 10
+        echo "Attempting to rebuild environment."
+        aws elasticbeanstalk rebuild-environment --environment-name django-env
+      fi
+      
+      if [ $i -eq $MAX_RETRIES ]; then
+        echo "Max retries reached. Aborting deployment."
+        exit 1
+      fi
+      sleep $RETRY_INTERVAL
+    done
 
 deploy:
   provider: elasticbeanstalk
@@ -36,5 +53,5 @@ deploy:
     branch: main
 
 after_deploy:
-  - echo "Deployment finished. Checking S3 access again:"
-  - aws s3 ls s3://elasticbeanstalk-us-west-2-158596392157 || echo "Failed to list S3 bucket after deployment"
+  - aws elasticbeanstalk describe-environments --environment-names django-env
+  - aws elasticbeanstalk describe-events --environment-name django-env --max-items 10
