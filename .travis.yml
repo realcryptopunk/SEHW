@@ -1,0 +1,7 @@
+     language: python
+     python:
+       - "3.8"  # Specify the Python version
+     install:
+       - pip install -r mysite/requirements.txt  # Install dependencies
+     script:
+       - pytest  
