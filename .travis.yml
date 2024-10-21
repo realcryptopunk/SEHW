@@ -1,9 +1,6 @@
 language: python
 python:
-  - "3.8"  # or whichever version you're using
-
-services:
-  - postgresql  # if you're using PostgreSQL
+  - "3.8"  # Adjust this if you're using a different Python version
 
 env:
   global:
@@ -11,16 +8,13 @@ env:
 
 before_install:
   - pip install --upgrade pip
-  - pip install awscli
 
 install:
   - pip install -r mysite/requirements.txt
-
-before_script:
-  - psql -c 'create database travis_ci_test;' -U postgres  # if using PostgreSQL
+  - pip install awscli pytest
 
 script:
-  - python manage.py test
+  - pytest mysite/polls/tests.py
 
 before_deploy:
   - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
