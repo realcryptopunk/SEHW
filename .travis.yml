@@ -5,3 +5,5 @@
        - pip install -r mysite/requirements.txt  # Install dependencies
      script:
        - pytest mysite/polls/tests.py
+     env:
+       - DJANGO_SETTINGS_MODULE=mysite.settings
