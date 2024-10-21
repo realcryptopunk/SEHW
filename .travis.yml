@@ -18,8 +18,7 @@ deploy:
   provider: s3
   access_key_id: $AWS_ACCESS_KEY_ID
   secret_access_key: $AWS_SECRET_ACCESS_KEY
-  bucket: your-bucket-name
+  bucket:  elasticbeanstalk-us-west-2-158596392157
   region: us-west-2
-  bucket_name: elasticbeanstalk-us-west-2-158596392157
   on:
     branch: main
