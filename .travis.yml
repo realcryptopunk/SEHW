@@ -1,9 +1,22 @@
-     language: python
-     python:
-       - "3.8"  # Specify the Python version
-     install:
-       - pip install -r mysite/requirements.txt  # Install dependencies
-     script:
-       - pytest mysite/polls/tests.py
-     env:
-       - DJANGO_SETTINGS_MODULE=mysite.settings
+language: python
+python:
+  - "3.8"  # Specify the Python version
+
+dist: focal  # Use Ubuntu Focal Fossa 20.04 (has SQLite 3.31.1)
+
+before_install:
+  - sudo apt-get update
+  - sudo apt-get install -y sqlite3
+  - sqlite3 --version
+
+install:
+  - pip install -r mysite/requirements.txt  # Install dependencies
+
+script:
+  - pytest mysite/polls/tests.py
+
+env:
+  - DJANGO_SETTINGS_MODULE=mysite.settings
+
+services:
+  - sqlite3
