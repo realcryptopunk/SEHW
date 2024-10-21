@@ -1,19 +1,27 @@
 language: python
 python:
-- '3.8'
+  - '3.8'
 dist: focal
-before_install:
-- sudo apt-get update
-- sudo apt-get install -y sqlite3
-- sqlite3 --version
+
 install:
-- pip install -r mysite/requirements.txt
+  - pip install -r mysite/requirements.txt
+  - pip install awscli
+
 script:
-- pytest mysite/polls/tests.py
+  - pytest mysite/polls/tests.py
+
 env:
-- DJANGO_SETTINGS_MODULE=mysite.settings
-services:
-- sqlite3
+  - DJANGO_SETTINGS_MODULE=mysite.settings
+
+before_deploy:
+  - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+  - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+  - aws configure set default.region us-west-2
+  - aws sts get-caller-identity
+  - aws s3 ls
+  - aws s3 ls s3://elasticbeanstalk-us-west-2-158596392157 || echo "Failed to list S3 bucket"
+  - aws elasticbeanstalk describe-environments --application-name django-tutorial || echo "Failed to describe Elastic Beanstalk environments"
+
 deploy:
   provider: elasticbeanstalk
   access_key_id:
@@ -26,3 +34,7 @@ deploy:
   bucket_name: elasticbeanstalk-us-west-2-158596392157
   on:
     branch: main
+
+after_deploy:
+  - echo "Deployment finished. Checking S3 access again:"
+  - aws s3 ls s3://elasticbeanstalk-us-west-2-158596392157 || echo "Failed to list S3 bucket after deployment"
