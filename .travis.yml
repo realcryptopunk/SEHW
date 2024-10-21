@@ -1,33 +1,54 @@
 language: python
 python:
-  - "3.8"
+  - "3.9"
 
-dist: focal  # Use Ubuntu Focal Fossa 20.04 (has SQLite 3.31.1)
+dist: focal
 
 env:
   global:
     - DJANGO_SETTINGS_MODULE=mysite.settings
 
-before_install:
-  - sudo apt-get update
-  - sudo apt-get install -y sqlite3
-  - sqlite3 --version
-
 install:
   - pip install --upgrade pip
   - pip install -r mysite/requirements.txt
-  - pip install awscli pytest
+  - pip install awscli awsebcli pytest
 
 script:
-  - cd mysite  # Change to the directory containing manage.py
-  - python manage.py test polls  # Run Django tests
+  - cd mysite
+  - python manage.py test polls
 
 before_deploy:
-  - cd ..  # Return to the root directory
-  - pip install awsebcli  # Install the Elastic Beanstalk CLI
-  - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
-  - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-  - aws configure set default.region us-west-2
+  - cd ..
+  - eb use django-env
+  - |
+    CURRENT_PLATFORM=$(eb platform show | grep "Platform:" | awk '{print $2}')
+    if [[ "$CURRENT_PLATFORM" != "python-3.9" ]]; then
+      echo "Current platform is outdated. Updating to Python 3.9..."
+      eb platform select python-3.9
+      eb upgrade
+    fi
+  - |
+    MAX_RETRIES=5
+    RETRY_INTERVAL=60
+    for i in $(seq 1 $MAX_RETRIES); do
+      echo "Attempt $i: Checking environment status"
+      STATUS=$(eb status django-env | grep "Status:" | awk '{print $2}')
+      HEALTH=$(eb health django-env --refresh | grep "Health:" | awk '{print $2}')
+      echo "Status: $STATUS, Health: $HEALTH"
+      if [ "$STATUS" = "Ready" ] && [ "$HEALTH" = "Green" ]; then
+        echo "Environment is ready and healthy. Proceeding with deployment."
+        break
+      else
+        echo "Environment is not ready or not healthy. Checking events:"
+        eb events -f
+        if [ $i -eq $MAX_RETRIES ]; then
+          echo "Max retries reached. Aborting deployment."
+          exit 1
+        fi
+        echo "Waiting before next check..."
+        sleep $RETRY_INTERVAL
+      fi
+    done
 
 deploy:
   provider: elasticbeanstalk
@@ -41,5 +62,6 @@ deploy:
     branch: main
 
 after_deploy:
-  - aws elasticbeanstalk describe-environments --environment-names django-env
-  - aws elasticbeanstalk describe-events --environment-name django-env --max-items 10
+  - eb status
+  - eb health
+  - eb events -f
