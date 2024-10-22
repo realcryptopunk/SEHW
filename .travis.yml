@@ -1,86 +1,22 @@
 language: python
-python:
-  - "3.9"
-
 dist: focal
-
-env:
-  global:
-    - DJANGO_SETTINGS_MODULE=mysite.settings
-    - AWS_DEFAULT_REGION=us-west-2
-
+before_install:
+- sudo apt-get update
+- sudo apt-get install -y sqlite3
+- sqlite3 --version
 install:
-  - pip install --upgrade pip
-  - pip install -r mysite/requirements.txt
-  - pip install awscli awsebcli pytest
-
+- pip install -r mysite/requirements.txt
 script:
-  - cd mysite
-  - python manage.py test polls
-  - cd ..
-
-before_deploy:
-  # Configure Git to prevent detached head warnings
-  - git config --global advice.detachedHead false
-  - git checkout -b deploy
-  
-  # Initialize EB CLI with debug output
-  - eb init django-tutorial -p python-3.9 --region $AWS_DEFAULT_REGION --verbose
-  - eb use django-env --verbose
-  
-  # Check environment status with shorter timeout
-  - |
-    MAX_RETRIES=10
-    RETRY_INTERVAL=30
-    for i in $(seq 1 $MAX_RETRIES); do
-      echo "Attempt $i of $MAX_RETRIES: Checking environment status"
-      
-      # Get environment status with timeout
-      timeout 30s eb status django-env || echo "Status check timed out"
-      STATUS=$(eb status django-env 2>/dev/null | grep "Status:" | awk '{print $2}')
-      echo "Current Status: ${STATUS:-Unknown}"
-      
-      # Get health status with timeout
-      timeout 30s eb health django-env || echo "Health check timed out"
-      HEALTH=$(eb health django-env 2>/dev/null | grep "Health:" | awk '{print $2}')
-      echo "Current Health: ${HEALTH:-Unknown}"
-      
-      if [ "$STATUS" = "Ready" ]; then
-        echo "Environment is ready. Proceeding with deployment."
-        break
-      else
-        echo "Environment is not ready. Checking events:"
-        timeout 30s eb events -f || echo "Events check timed out"
-        
-        if [ $i -eq $MAX_RETRIES ]; then
-          echo "Max retries reached. Proceeding with deployment anyway."
-          break
-        fi
-        
-        echo "Waiting $RETRY_INTERVAL seconds before next check..."
-        sleep $RETRY_INTERVAL
-      fi
-      
-      # Print a dot every 5 seconds to prevent timeout
-      (while true; do echo -n .; sleep 5; done) &
-      DOTS_PID=$!
-      sleep $RETRY_INTERVAL
-      kill $DOTS_PID 2>/dev/null || true
-    done
-
+- pytest mysite/polls/tests.py
+env:
+- DJANGO_SETTINGS_MODULE=mysite.settings
+services:
+- sqlite3
 deploy:
-  provider: elasticbeanstalk
+  provider: s3
   access_key_id: $AWS_ACCESS_KEY_ID
   secret_access_key: $AWS_SECRET_ACCESS_KEY
-  region: $AWS_DEFAULT_REGION
-  app: "django-tutorial"
-  env: "django-env"
-  bucket_name: "elasticbeanstalk-us-west-2-158596392157"
-  # Use the deploy branch we created
+  bucket:  elasticbeanstalk-us-west-2-158596392157
+  region: us-west-2
   on:
-    branch: deploy
-
-after_deploy:
-  - echo "Deployment completed, checking final status"
-  - eb status django-env || true
-  - eb health django-env || true
+    branch: main
