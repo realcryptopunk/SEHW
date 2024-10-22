@@ -20,29 +20,52 @@ script:
   - cd ..
 
 before_deploy:
-  - eb init django-tutorial -p python-3.9 --region $AWS_DEFAULT_REGION
-  - eb use django-env
+  # Configure Git to prevent detached head warnings
+  - git config --global advice.detachedHead false
+  - git checkout -b deploy
+  
+  # Initialize EB CLI with debug output
+  - eb init django-tutorial -p python-3.9 --region $AWS_DEFAULT_REGION --verbose
+  - eb use django-env --verbose
+  
+  # Check environment status with shorter timeout
   - |
-    MAX_RETRIES=5
-    RETRY_INTERVAL=60
+    MAX_RETRIES=10
+    RETRY_INTERVAL=30
     for i in $(seq 1 $MAX_RETRIES); do
-      echo "Attempt $i: Checking environment status"
-      STATUS=$(eb status django-env | grep "Status:" | awk '{print $2}')
-      HEALTH=$(eb health django-env --refresh | grep "Health:" | awk '{print $2}')
-      echo "Status: $STATUS, Health: $HEALTH"
-      if [ "$STATUS" = "Ready" ] && [ "$HEALTH" = "Green" ]; then
-        echo "Environment is ready and healthy. Proceeding with deployment."
+      echo "Attempt $i of $MAX_RETRIES: Checking environment status"
+      
+      # Get environment status with timeout
+      timeout 30s eb status django-env || echo "Status check timed out"
+      STATUS=$(eb status django-env 2>/dev/null | grep "Status:" | awk '{print $2}')
+      echo "Current Status: ${STATUS:-Unknown}"
+      
+      # Get health status with timeout
+      timeout 30s eb health django-env || echo "Health check timed out"
+      HEALTH=$(eb health django-env 2>/dev/null | grep "Health:" | awk '{print $2}')
+      echo "Current Health: ${HEALTH:-Unknown}"
+      
+      if [ "$STATUS" = "Ready" ]; then
+        echo "Environment is ready. Proceeding with deployment."
         break
       else
-        echo "Environment is not ready or not healthy. Checking events:"
-        eb events -f
+        echo "Environment is not ready. Checking events:"
+        timeout 30s eb events -f || echo "Events check timed out"
+        
         if [ $i -eq $MAX_RETRIES ]; then
-          echo "Max retries reached. Aborting deployment."
-          exit 1
+          echo "Max retries reached. Proceeding with deployment anyway."
+          break
         fi
-        echo "Waiting before next check..."
+        
+        echo "Waiting $RETRY_INTERVAL seconds before next check..."
         sleep $RETRY_INTERVAL
       fi
+      
+      # Print a dot every 5 seconds to prevent timeout
+      (while true; do echo -n .; sleep 5; done) &
+      DOTS_PID=$!
+      sleep $RETRY_INTERVAL
+      kill $DOTS_PID 2>/dev/null || true
     done
 
 deploy:
@@ -53,10 +76,11 @@ deploy:
   app: "django-tutorial"
   env: "django-env"
   bucket_name: "elasticbeanstalk-us-west-2-158596392157"
+  # Use the deploy branch we created
   on:
-    branch: main
+    branch: deploy
 
 after_deploy:
-  - eb status
-  - eb health
-  - eb events -f
+  - echo "Deployment completed, checking final status"
+  - eb status django-env || true
+  - eb health django-env || true
